@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Technical Job Tracker - Viewer</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; background-color: #f4f4f4; }
+        h1 { color: #333; text-align: center; }
+        h2 { color: #333; }
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; background: #fff; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
+        th, td { border: 1px solid #ddd; padding: 10px; text-align: left; font-size: 14px; }
+        th { background: #f2f2f2; }
+        .priority-normal { background-color: #fff; }
+        .priority-urgent { background-color: #ffeb3b; color: #000; }
+        .priority-within-today { background-color: #f44336; color: #fff; }
+        .status-pending { background-color: #fff; }
+        .status-in-progress { background-color: #90ee90; } /* Light Green */
+        .status-checking { background-color: #add8e6; } /* Light Blue */
+        .status-completed { background-color: #008000; color: #fff; } /* Green */
+        .status-hold { background-color: #ffff00; } /* Yellow */
+        .status-commented { background-color: #ffb6c1; } /* Light Red */
+        .filters { display: flex; gap: 15px; margin-bottom: 15px; }
+        .filters select { width: auto; font-size: 14px; padding: 6px; }
+        .days-taken-light-red { background-color: #ffb6c1; } /* Light Red */
+        .days-taken-red { background-color: #f44336; color: #fff; } /* Red */
+        .days-taken-dark-red { background-color: #8b0000; color: #fff; } /* Dark Red */
+    </style>
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/10.13.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.13.1/firebase-database.js"></script>
+</head>
+<body>
+    <h1>Technical Job Tracker - Viewer</h1>
+
+    <h2>Filters</h2>
+    <div class="filters">
+        <div>
+            <label for="filterStatus">Status</label>
+            <select id="filterStatus">
+                <option value="">All Statuses</option>
+                <option>Pending</option>
+                <option>In Progress</option>
+                <option>Checking</option>
+                <option>Completed</option>
+                <option>Hold</option>
+                <option>Commented</option>
+            </select>
+        </div>
+        <div>
+            <label for="filterAssignee">Assignee</label>
+            <select id="filterAssignee">
+                <option value="">All Assignees</option>
+                <option>Unassigned</option>
+                <option>Santhosh</option>
+                <option>Mani</option>
+                <option>Dharanish</option>
+                <option>Sheik</option>
+                <option>Harish</option>
+                <option>Fazil</option>
+            </select>
+        </div>
+        <div>
+            <label for="filterPriority">Priority</label>
+            <select id="filterPriority">
+                <option value="">All Priorities</option>
+                <option>Normal</option>
+                <option>Urgent</option>
+                <option>Within Today</option>
+            </select>
+        </div>
+    </div>
+
+    <h2>Active Tasks</h2>
+    <table id="activeTasks">
+        <thead>
+            <tr>
+                <th>Request Code</th>
+                <th>Requested By</th>
+                <th>Task</th>
+                <th>Assigned To</th>
+                <th>Added Date</th>
+                <th>Due Date</th>
+                <th>Days Taken</th>
+                <th>Days Remaining</th>
+                <th>Priority</th>
+                <th>Status</th>
+                <th>Note</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody></tbody>
+    </table>
+
+    <h2>Job History</h2>
+    <table id="jobHistory">
+        <thead>
+            <tr>
+                <th>Request Code</th>
+                <th>Requested By</th>
+                <th>Task</th>
+                <th>Assigned To</th>
+                <th>Added Date</th>
+                <th>Due Date</th>
+                <th>Priority</th>
+                <th>Status</th>
+                <th>Note</th>
+                <th>Moved Date</th>
+                <th>Status Times</th>
+            </tr>
+        </thead>
+        <tbody></tbody>
+    </table>
+
+    <script>
+        // Firebase Initialization
+        const firebaseConfig = {
+            apiKey: "AIzaSyAizaSyBugCDYleeDAX9BbGpoWoA67YDtQ-43zyk",
+            authDomain: "tasktrackernew-e3917.firebaseapp.com",
+            databaseURL: "https://tasktrackernew-e3917-default-rtdb.asia-southeast1.firebasedatabase.app",
+            projectId: "tasktrackernew-e3917",
+            storageBucket: "tasktrackernew-e3917.firebasestorage.app",
+            messagingSenderId: "611646815555",
+            appId: "1:611646815555:web:49a6760b7160414aa157b6"
+        };
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.database();
+
+        let activeTasks = [];
+        let jobHistory = [];
+        const today = new Date().toISOString().split('T')[0];
+        const lastDateKey = 'lastSavedDate';
+        const lastSavedDate = localStorage.getItem(lastDateKey);
+        if (lastSavedDate && lastSavedDate !== today && jobHistory.length > 0) {
+            downloadHistoryAsCSV();
+            db.ref('jobHistory').set([]);
+        }
+        localStorage.setItem(lastDateKey, today);
+
+        // Load data from Firebase
+        function loadData() {
+            db.ref('activeTasks').on('value', (snapshot) => {
+                activeTasks = snapshot.val() || [];
+                renderTables();
+            });
+            db.ref('jobHistory').on('value', (snapshot) => {
+                jobHistory = snapshot.val() || [];
+                renderTables();
+            });
+        }
+
+        // Save data to Firebase
+        function saveData() {
+            db.ref('activeTasks').set(activeTasks);
+            db.ref('jobHistory').set(jobHistory);
+        }
+
+        // Calculate days between two dates
+        function calculateDays(start, end) {
+            if (!start || !end) return '-';
+            const diff = new Date(end) - new Date(start);
+            return Math.ceil(diff / (1000 * 60 * 60 * 24));
+        }
+
+        // Get priority level for sorting
+        function getPriorityLevel(priority) {
+            if (priority === 'Within Today') return 3;
+            if (priority === 'Urgent') return 2;
+            return 1;
+        }
+
+        // Render tables with filters and sorting
+        function renderTables() {
+            const filterStatus = document.getElementById('filterStatus').value;
+            const filterAssignee = document.getElementById('filterAssignee').value;
+            const filterPriority = document.getElementById('filterPriority').value;
+
+            // Sort active tasks: priority desc, then has dueDate (with dueDate first), then date asc
+            activeTasks.sort((a, b) => {
+                const priA = getPriorityLevel(a.priority);
+                const priB = getPriorityLevel(b.priority);
+                if (priA !== priB) return priB - priA;
+
+                const hasDueA = !!a.dueDate;
+                const hasDueB = !!b.dueDate;
+                if (hasDueA !== hasDueB) return hasDueB - hasDueA; // true (1) before false (0)
+
+                const dateA = a.dueDate || a.addedDate;
+                const dateB = b.dueDate || b.addedDate;
+                return new Date(dateA) - new Date(dateB);
+            });
+
+            // Active Tasks
+            const activeTbody = document.getElementById('activeTasks').querySelector('tbody');
+            activeTbody.innerHTML = '';
+            activeTasks
+                .filter(task => (!filterStatus || task.status === filterStatus) &&
+                                (!filterAssignee || task.assignedTo === filterAssignee) &&
+                                (!filterPriority || task.priority === filterPriority))
+                .forEach(task => {
+                    const row = document.createElement('tr');
+                    const daysTaken = calculateDays(task.addedDate, today);
+                    const daysRemaining = calculateDays(today, task.dueDate);
+                    const priorityClass = `priority-${task.priority.toLowerCase().replace(' ', '-')}`;
+                    const statusClass = `status-${task.status.toLowerCase().replace(' ', '-')}`;
+
+                    let daysTakenClass = '';
+                    if (daysTaken !== '-' && !isNaN(daysTaken)) {
+                        if (task.priority === 'Within Today' && daysTaken > 0) {
+                            daysTakenClass = 'days-taken-red';
+                        } else if (task.priority === 'Urgent' && daysTaken > 1) {
+                            daysTakenClass = 'days-taken-red';
+                        } else if (task.priority === 'Normal') {
+                            if (daysTaken > 5) {
+                                daysTakenClass = 'days-taken-dark-red';
+                            } else if (daysTaken > 2) {
+                                daysTakenClass = 'days-taken-red';
+                            } else if (daysTaken > 1) {
+                                daysTakenClass = 'days-taken-light-red';
+                            }
+                        }
+                    }
+
+                    const isPending = task.status === 'Pending';
+                    const isInProgress = task.status === 'In Progress';
+                    const isHold = task.status === 'Hold';
+                    const isChecking = task.status === 'Checking';
+                    const isCompleted = task.status === 'Completed';
+                    const isCommented = task.status === 'Commented';
+
+                    const assignedCell = task.assignedTo
+
+!== 'Unassigned' ? task.assignedTo : task.assignedTo;  // Read-only, no select
+
+                    row.innerHTML = `
+                        <td class="${statusClass}">${task.requestId}</td>
+                        <td class="${statusClass}">${task.requestedBy}</td>
+                        <td class="${statusClass}">${task.taskType}</td>
+                        <td class="${statusClass}">${assignedCell}</td>
+                        <td class="${statusClass}">${task.addedDate}</td>
+                        <td class="${statusClass}">${task.dueDate || '-'}</td>
+                        <td class="${statusClass} ${daysTakenClass}">${daysTaken}</td>
+                        <td class="${statusClass}">${daysRemaining > 0 ? daysRemaining : (daysRemaining === '-' ? '-' : 'Overdue')}</td>
+                        <td class="${priorityClass}">${task.priority}</td>
+                        <td class="${statusClass}">${task.status}</td>
+                        <td class="${statusClass}">${task.notes}</td>
+                        <td class="actions">
+                            <!-- No actions -->
+                        </td>
+                    `;
+                    activeTbody.appendChild(row);
+                });
+
+            // Job History (read-only)
+            const historyTbody = document.getElementById('jobHistory').querySelector('tbody');
+            historyTbody.innerHTML = '';
+            jobHistory.forEach(task => {
+                const statusTimesStr = Object.entries(task.statusTimes || {}).map(([status, time]) => `${status}: ${time}`).join('<br>');
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td>${task.requestId}</td>
+                    <td>${task.requestedBy}</td>
+                    <td>${task.taskType}</td>
+                    <td>${task.assignedTo}</td>
+                    <td>${task.addedDate}</td>
+                    <td>${task.dueDate || '-'}</td>
+                    <td>${task.priority}</td>
+                    <td>${task.status}</td>
+                    <td>${task.notes}</td>
+                    <td>${task.movedDate}</td>
+                    <td>${statusTimesStr}</td>
+                `;
+                historyTbody.appendChild(row);
+            });
+        }
+
+        // Filter change listeners
+        document.getElementById('filterStatus').addEventListener('change', renderTables);
+        document.getElementById('filterAssignee').addEventListener('change', renderTables);
+        document.getElementById('filterPriority').addEventListener('change', renderTables);
+
+        // Initial load
+        loadData();
+    </script>
+</body>
+</html>
