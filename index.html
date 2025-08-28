@@ -92,25 +92,7 @@
         <tbody></tbody>
     </table>
 
-    <h2>Job History</h2>
-    <table id="jobHistory">
-        <thead>
-            <tr>
-                <th>Request Code</th>
-                <th>Requested By</th>
-                <th>Task</th>
-                <th>Assigned To</th>
-                <th>Added Date</th>
-                <th>Due Date</th>
-                <th>Priority</th>
-                <th>Status</th>
-                <th>Note</th>
-                <th>Moved Date</th>
-                <th>Status Times</th>
-            </tr>
-        </thead>
-        <tbody></tbody>
-    </table>
+    
 
     <script>
         // Firebase Initialization
@@ -251,27 +233,7 @@
                     activeTbody.appendChild(row);
                 });
 
-            // Job History (read-only)
-            const historyTbody = document.getElementById('jobHistory').querySelector('tbody');
-            historyTbody.innerHTML = '';
-            jobHistory.forEach(task => {
-                const statusTimesStr = Object.entries(task.statusTimes || {}).map(([status, time]) => `${status}: ${time}`).join('<br>');
-                const row = document.createElement('tr');
-                row.innerHTML = `
-                    <td>${task.requestId}</td>
-                    <td>${task.requestedBy}</td>
-                    <td>${task.taskType}</td>
-                    <td>${task.assignedTo}</td>
-                    <td>${task.addedDate}</td>
-                    <td>${task.dueDate || '-'}</td>
-                    <td>${task.priority}</td>
-                    <td>${task.status}</td>
-                    <td>${task.notes}</td>
-                    <td>${task.movedDate}</td>
-                    <td>${statusTimesStr}</td>
-                `;
-                historyTbody.appendChild(row);
-            });
+            
         }
 
         // Filter change listeners
@@ -284,4 +246,5 @@
     </script>
 </body>
 </html>
+
 
