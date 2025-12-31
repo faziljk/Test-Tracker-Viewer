@@ -15,18 +15,18 @@
         .priority-urgent { background-color: #ffeb3b; color: #000; }
         .priority-within-today { background-color: #f44336; color: #fff; }
         .status-pending { background-color: #fff; }
-        .status-in-progress { background-color: #90ee90; } /* Light Green */
-        .status-checking { background-color: #add8e6; } /* Light Blue */
-        .status-completed { background-color: #008000; color: #fff; } /* Green */
-        .status-hold { background-color: #ffff00; } /* Yellow */
-        .status-commented { background-color: #ffb6c1; } /* Light Red */
-        .filters { display: flex; gap: 15px; margin-bottom: 15px; }
+        .status-in-progress { background-color: #90ee90; }
+        .status-checking { background-color: #add8e6; }
+        .status-completed { background-color: #008000; color: #fff; }
+        .status-hold { background-color: #ffff00; }
+        .status-commented { background-color: #ffb6c1; }
+        .filters { display: flex; gap: 15px; margin-bottom: 15px; align-items: end; }
         .filters select { width: auto; font-size: 14px; padding: 6px; }
-        .days-taken-light-red { background-color: #ffb6c1; } /* Light Red */
-        .days-taken-red { background-color: #f44336; color: #fff; } /* Red */
-        .days-taken-dark-red { background-color: #8b0000; color: #fff; } /* Dark Red */
+        .days-taken-light-red { background-color: #ffb6c1; }
+        .days-taken-red { background-color: #f44336; color: #fff; }
+        .days-taken-dark-red { background-color: #8b0000; color: #fff; }
     </style>
-    <!-- Firebase SDK -->
+    <!-- Firebase SDK (compat) -->
     <script src="https://www.gstatic.com/firebasejs/10.13.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.13.1/firebase-database-compat.js"></script>
 </head>
@@ -36,37 +36,19 @@
     <h2>Filters</h2>
     <div class="filters">
         <div>
-            <label for="filterStatus">Status</label>
-            <select id="filterStatus">
-                <option value="">All Statuses</option>
-                <option>Pending</option>
-                <option>In Progress</option>
-                <option>Checking</option>
-                <option>Completed</option>
-                <option>Hold</option>
-                <option>Commented</option>
-            </select>
-        </div>
-        <div>
-            <label for="filterAssignee">Assignee</label>
-            <select id="filterAssignee">
-                <option value="">All Assignees</option>
-                <option>Unassigned</option>
-                <option>Santhosh</option>
-                <option>Mani</option>
-                <option>Dharanish</option>
-                <option>Sheik</option>
-                <option>Harish</option>
-                <option>Fazil</option>
-            </select>
-        </div>
-        <div>
-            <label for="filterPriority">Priority</label>
-            <select id="filterPriority">
-                <option value="">All Priorities</option>
-                <option>Normal</option>
-                <option>Urgent</option>
-                <option>Within Today</option>
+            <label for="filterRequestedBy">Requested By</label>
+            <select id="filterRequestedBy">
+                <option value="">All</option>
+                <option>Merwin</option>
+                <option>Jeeva</option>
+                <option>Sachin</option>
+                <option>Kaveri</option>
+                <option>Pandu</option>
+                <option>Production</option>
+                <option>Qc</option>
+                <option>Ramji</option>
+                <option>Babu</option>
+                <option>Other</option>
             </select>
         </div>
     </div>
@@ -86,16 +68,32 @@
                 <th>Priority</th>
                 <th>Status</th>
                 <th>Note</th>
-                <th>Actions</th>
             </tr>
         </thead>
         <tbody></tbody>
     </table>
 
-    
+    <h2>Job History <span class="arrow" onclick="toggleHistory()">▶</span></h2>
+    <table id="jobHistory">
+        <thead>
+            <tr>
+                <th>Request Code</th>
+                <th>Requested By</th>
+                <th>Task</th>
+                <th>Assigned To</th>
+                <th>Added Date</th>
+                <th>Due Date</th>
+                <th>Priority</th>
+                <th>Status</th>
+                <th>Note</th>
+                <th>Moved Date</th>
+                <th>Status Times</th>
+            </tr>
+        </thead>
+        <tbody></tbody>
+    </table>
 
     <script>
-        // Firebase Initialization
         const firebaseConfig = {
             apiKey: "AIzaSyAizaSyBugCDYleeDAX9BbGpoWoA67YDtQ-43zyk",
             authDomain: "tasktrackernew-e3917.firebaseapp.com",
@@ -110,16 +108,9 @@
 
         let activeTasks = [];
         let jobHistory = [];
+        let showHistory = false;
         const today = new Date().toISOString().split('T')[0];
-        const lastDateKey = 'lastSavedDate';
-        const lastSavedDate = localStorage.getItem(lastDateKey);
-        if (lastSavedDate && lastSavedDate !== today && jobHistory.length > 0) {
-            downloadHistoryAsCSV();
-            db.ref('jobHistory').set([]);
-        }
-        localStorage.setItem(lastDateKey, today);
 
-        // Load data from Firebase
         function loadData() {
             db.ref('activeTasks').on('value', (snapshot) => {
                 activeTasks = snapshot.val() || [];
@@ -131,33 +122,21 @@
             });
         }
 
-        // Save data to Firebase
-        function saveData() {
-            db.ref('activeTasks').set(activeTasks);
-            db.ref('jobHistory').set(jobHistory);
-        }
-
-        // Calculate days between two dates
         function calculateDays(start, end) {
             if (!start || !end) return '-';
             const diff = new Date(end) - new Date(start);
             return Math.ceil(diff / (1000 * 60 * 60 * 24));
         }
 
-        // Get priority level for sorting
         function getPriorityLevel(priority) {
             if (priority === 'Within Today') return 3;
             if (priority === 'Urgent') return 2;
             return 1;
         }
 
-        // Render tables with filters and sorting
         function renderTables() {
-            const filterStatus = document.getElementById('filterStatus').value;
-            const filterAssignee = document.getElementById('filterAssignee').value;
-            const filterPriority = document.getElementById('filterPriority').value;
+            const filterRequestedBy = document.getElementById('filterRequestedBy').value;
 
-            // Sort active tasks: priority desc, then has dueDate (with dueDate first), then date asc
             activeTasks.sort((a, b) => {
                 const priA = getPriorityLevel(a.priority);
                 const priB = getPriorityLevel(b.priority);
@@ -165,20 +144,17 @@
 
                 const hasDueA = !!a.dueDate;
                 const hasDueB = !!b.dueDate;
-                if (hasDueA !== hasDueB) return hasDueB - hasDueA; // true (1) before false (0)
+                if (hasDueA !== hasDueB) return hasDueB - hasDueA;
 
                 const dateA = a.dueDate || a.addedDate;
                 const dateB = b.dueDate || b.addedDate;
                 return new Date(dateA) - new Date(dateB);
             });
 
-            // Active Tasks
             const activeTbody = document.getElementById('activeTasks').querySelector('tbody');
             activeTbody.innerHTML = '';
             activeTasks
-                .filter(task => (!filterStatus || task.status === filterStatus) &&
-                                (!filterAssignee || task.assignedTo === filterAssignee) &&
-                                (!filterPriority || task.priority === filterPriority))
+                .filter(task => !filterRequestedBy || task.requestedBy === filterRequestedBy)
                 .forEach(task => {
                     const row = document.createElement('tr');
                     const daysTaken = calculateDays(task.addedDate, today);
@@ -188,37 +164,20 @@
 
                     let daysTakenClass = '';
                     if (daysTaken !== '-' && !isNaN(daysTaken)) {
-                        if (task.priority === 'Within Today' && daysTaken > 0) {
-                            daysTakenClass = 'days-taken-red';
-                        } else if (task.priority === 'Urgent' && daysTaken > 1) {
-                            daysTakenClass = 'days-taken-red';
-                        } else if (task.priority === 'Normal') {
-                            if (daysTaken > 5) {
-                                daysTakenClass = 'days-taken-dark-red';
-                            } else if (daysTaken > 2) {
-                                daysTakenClass = 'days-taken-red';
-                            } else if (daysTaken > 1) {
-                                daysTakenClass = 'days-taken-light-red';
-                            }
+                        if (task.priority === 'Within Today' && daysTaken > 0) daysTakenClass = 'days-taken-red';
+                        else if (task.priority === 'Urgent' && daysTaken > 1) daysTakenClass = 'days-taken-red';
+                        else if (task.priority === 'Normal') {
+                            if (daysTaken > 5) daysTakenClass = 'days-taken-dark-red';
+                            else if (daysTaken > 2) daysTakenClass = 'days-taken-red';
+                            else if (daysTaken > 1) daysTakenClass = 'days-taken-light-red';
                         }
                     }
-
-                    const isPending = task.status === 'Pending';
-                    const isInProgress = task.status === 'In Progress';
-                    const isHold = task.status === 'Hold';
-                    const isChecking = task.status === 'Checking';
-                    const isCompleted = task.status === 'Completed';
-                    const isCommented = task.status === 'Commented';
-
-                    const assignedCell = task.assignedTo
-
-!== 'Unassigned' ? task.assignedTo : task.assignedTo;  // Read-only, no select
 
                     row.innerHTML = `
                         <td class="${statusClass}">${task.requestId}</td>
                         <td class="${statusClass}">${task.requestedBy}</td>
                         <td class="${statusClass}">${task.taskType}</td>
-                        <td class="${statusClass}">${assignedCell}</td>
+                        <td class="${statusClass}">${task.assignedTo || 'Unassigned'}</td>
                         <td class="${statusClass}">${task.addedDate}</td>
                         <td class="${statusClass}">${task.dueDate || '-'}</td>
                         <td class="${statusClass} ${daysTakenClass}">${daysTaken}</td>
@@ -226,25 +185,57 @@
                         <td class="${priorityClass}">${task.priority}</td>
                         <td class="${statusClass}">${task.status}</td>
                         <td class="${statusClass}">${task.notes}</td>
-                        <td class="actions">
-                            <!-- No actions -->
-                        </td>
                     `;
                     activeTbody.appendChild(row);
                 });
 
-            
+            // Job History (collapsed by default, show last 10 when expanded)
+            const historyTbody = document.getElementById('jobHistory').querySelector('tbody');
+            historyTbody.innerHTML = '';
+            if (showHistory && jobHistory.length > 0) {
+                const sorted = [...jobHistory].sort((a, b) => new Date(b.movedDate) - new Date(a.movedDate));
+                sorted.slice(0, 10).forEach(task => {
+                    const statusTimesStr = Object.entries(task.statusTimes || {}).map(([s, t]) => `${s}: ${t}`).join('<br>');
+                    const row = document.createElement('tr');
+                    row.innerHTML = `
+                        <td>${task.requestId}</td>
+                        <td>${task.requestedBy}</td>
+                        <td>${task.taskType}</td>
+                        <td>${task.assignedTo}</td>
+                        <td>${task.addedDate}</td>
+                        <td>${task.dueDate || '-'}</td>
+                        <td>${task.priority}</td>
+                        <td>${task.status}</td>
+                        <td>${task.notes}</td>
+                        <td>${task.movedDate}</td>
+                        <td>${statusTimesStr}</td>
+                    `;
+                    historyTbody.appendChild(row);
+                });
+            }
+
+            // History visibility
+            const historyTable = document.getElementById('jobHistory');
+            const arrow = document.querySelector('.arrow');
+            if (showHistory) {
+                historyTable.style.display = 'table';
+                arrow.textContent = '▼';
+                arrow.classList.add('expanded');
+            } else {
+                historyTable.style.display = 'none';
+                arrow.textContent = '▶';
+                arrow.classList.remove('expanded');
+            }
         }
 
-        // Filter change listeners
-        document.getElementById('filterStatus').addEventListener('change', renderTables);
-        document.getElementById('filterAssignee').addEventListener('change', renderTables);
-        document.getElementById('filterPriority').addEventListener('change', renderTables);
+        function toggleHistory() {
+            showHistory = !showHistory;
+            renderTables();
+        }
 
-        // Initial load
+        document.getElementById('filterRequestedBy').addEventListener('change', renderTables);
+
         loadData();
     </script>
 </body>
 </html>
-
-
